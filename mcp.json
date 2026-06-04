@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "Slm MCP Hub": {
+      "command": "python3",
+      "args": ["/path/to/mcp-stdio-bridge.py"]
+    },
+    "Mem0": {
+      "command": "python3",
+      "args": ["/path/to/mem0-bridge.py"]
+    }
+  }
+}
