@@ -145,7 +145,7 @@ def _handle_tools_list(req_id):
     tools = [
         {
             "name": "memories_add",
-            "description": "【手动】添加记忆。触发：用户明确要求记住某事，或对话中提取到重要事实（偏好、配置、决策）。输入：text=记忆内容。输出：记忆ID。",
+            "description": "添加记忆。触发：用户明确要求记住某事，或对话中提取到重要事实（偏好、配置、决策）。输入：text=记忆内容。输出：记忆ID。",
             "inputSchema": {
                 "type": "object",
                 "properties": {"text": {"type": "string", "description": "记忆文本内容"}},
@@ -154,7 +154,7 @@ def _handle_tools_list(req_id):
         },
         {
             "name": "memories_search",
-            "description": "【手动】搜索记忆。触发：需要查询历史信息时调用。输入：query=关键词。输出：匹配的记忆列表，openclaw来源+30%权重。",
+            "description": "搜索记忆。触发：需要查询历史信息时调用。输入：query=关键词。输出：匹配的记忆列表，openclaw来源+30%权重。",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -166,12 +166,12 @@ def _handle_tools_list(req_id):
         },
         {
             "name": "memories_get_all",
-            "description": "【手动】获取全部记忆。触发：用户要求查看所有记忆，或需要全面回顾历史。输出：用户的所有记忆列表。",
+            "description": "获取全部记忆。触发：用户要求查看所有记忆，或需要全面回顾历史。输出：用户的所有记忆列表。",
             "inputSchema": {"type": "object", "properties": {}},
         },
         {
             "name": "memories_batch_add",
-            "description": "【手动】批量添加记忆。触发：需要一次性存储多条记忆。输入：conversations=记忆数组。输出：添加结果。",
+            "description": "批量添加记忆。触发：需要一次性存储多条记忆。输入：conversations=记忆数组。输出：添加结果。",
             "inputSchema": {
                 "type": "object",
                 "properties": {"conversations": {"type": "array", "description": "记忆内容数组"}},

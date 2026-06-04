@@ -150,7 +150,7 @@ TOOL_ALIASES = {
 ZH_DESCRIPTIONS = {
     "hub__search_tools": "【必须】搜索工具。触发条件：用户意图涉及外部服务（地图、代码仓库、搜索、金融数据等），需要先搜索可用工具。输入：query=意图关键词。输出：匹配的工具名称、描述、参数schema。",
     "hub__call_tool": "【必须】调用工具。触发条件：已通过search_tools找到目标工具，需要执行具体操作。输入：tool=完整工具名（如'github__search_repositories'），arguments=参数对象。输出：工具执行结果。",
-    "hub__list_servers": "【手动】列出服务器。触发条件：用户询问有哪些MCP服务可用，或需要了解服务概览。输出：6个服务器及其工具数量列表。",
+    "hub__list_servers": "列出服务器。触发条件：用户询问有哪些MCP服务可用，或需要了解服务概览。输出：6个服务器及其工具数量列表。",
 }
 
 ZH_INPUT_DESCRIPTIONS = {
