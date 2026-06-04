@@ -16,12 +16,13 @@ import json
 import subprocess
 import sys
 import os
-import tempfile
+from datetime import datetime
 
 SSH_HOST = "192.168.0.201"
 SSH_USER = "z20503740"
 OPENCLAW_CONFIG_PATH = "/home/z20503740/.openclaw/openclaw.json"
 OPENCLAW_WORKSPACE = "/home/z20503740/.openclaw/workspace"
+MCP_MESSAGES_PATH = "/home/z20503740/.openclaw/mcp-messages.json"
 GATEWAY_TOKEN = "82030a5c0222984ac856c3c2fa3e478b812bde4579fa00b3"
 
 
@@ -88,8 +89,15 @@ def tool(name: str, description: str, input_schema: dict):
 )
 def handle_agent_turn(message: str, agent_id: str = "main") -> str:
     """Send a message to OpenClaw's agent and get response."""
-    # Use openclaw agent command via SSH with correct CLI syntax
-    escaped_msg = message.replace("'", "'\\''")
+    # 追加出站消息指令：告诉 Agent 如有需要可写入消息板
+    outbox_note = (
+        "\n\n[系统指令] 如果你在处理过程中发现了需要主动向用户报告的事项"
+        "（如系统状态变化、任务完成、异常告警、需要用户决策等），"
+        "请使用 ~/.openclaw/mcp-send-msg.sh <level> <message> 写入消息板，"
+        "用户会在下一轮对话中收到。level 可选: info/warn/error/task_done"
+    )
+    full_message = message + outbox_note
+    escaped_msg = full_message.replace("'", "'\\''")
     cmd = f"openclaw agent --agent {agent_id} -m '{escaped_msg}' 2>&1"
     return ssh_run(cmd, timeout=120)
 
@@ -240,6 +248,104 @@ def handle_agents_list() -> str:
 def handle_gateway_status() -> str:
     """Check OpenClaw gateway status."""
     return ssh_run("openclaw gateway status 2>&1", timeout=30)
+
+
+@tool(
+    "openclaw_auto_report",
+    "【必须】每轮对话开始时调用，检查 OpenClaw 201 是否有待汇报消息。"
+    "触发条件：每轮对话收到用户消息后、生成回复前调用。"
+    "目的：检查 OpenClaw 是否留下待处理消息（任务完成、系统告警等），"
+    "同时做快速健康检查（Gateway 状态、磁盘空间）。"
+    "输出：待处理消息列表 + 系统健康摘要。",
+    {
+        "type": "object",
+        "properties": {
+            "include_health": {
+                "type": "boolean",
+                "description": "是否包含系统健康检查（磁盘/Gateway状态），默认 true",
+                "default": True,
+            },
+        },
+    },
+)
+def handle_auto_report(include_health: bool = True) -> str:
+    """Check for pending messages from OpenClaw and system health."""
+    parts = []
+
+    # 1. 读取消息板（JSON Lines 格式：每行一个 JSON 对象）
+    try:
+        raw = ssh_run(f"cat {MCP_MESSAGES_PATH} 2>/dev/null || true")
+        messages = []
+        for line in raw.strip().split("\n"):
+            line = line.strip()
+            if line:
+                try:
+                    messages.append(json.loads(line))
+                except json.JSONDecodeError:
+                    pass
+    except RuntimeError:
+        messages = []
+
+    if messages:
+        parts.append(f"📬 OpenClaw 有 {len(messages)} 条待处理消息：")
+        for m in messages[-5:]:  # 最多显示最近5条
+            level = m.get("level", "?")
+            msg = m.get("message", "?")
+            ts = m.get("timestamp", "?")
+            parts.append(f"  [{level}] {msg} ({ts})")
+        # 清空消息板（已读取）
+        ssh_run(f"echo '' > {MCP_MESSAGES_PATH}")
+    else:
+        parts.append("📭 OpenClaw 暂无待处理消息")
+
+    # 2. 健康检查
+    if include_health:
+        try:
+            gw = ssh_run("openclaw gateway status 2>&1 | head -3")
+            disk = ssh_run("df -h / | tail -1 | awk '{print $5 \" used of \" $2}'")
+            parts.append(f"  Gateway: {gw.split(chr(10))[0]}")
+            parts.append(f"  磁盘: {disk}")
+        except RuntimeError as e:
+            parts.append(f"  健康检查失败: {e}")
+
+    return "\n".join(parts)
+
+
+@tool(
+    "openclaw_send_message",
+    "向用户发送一条来自 OpenClaw 的消息。"
+    "触发条件：OpenClaw 的 Agent 有需要主动报告的事项时调用此工具写入消息板。"
+    "目的：实现 OpenClaw 到 Trae 的异步消息传递（半双向通信）。"
+    "输入：level=消息级别, message=消息内容。"
+    "输出：写入结果。",
+    {
+        "type": "object",
+        "properties": {
+            "level": {
+                "type": "string",
+                "description": "消息级别: info|warn|error|task_done",
+                "default": "info",
+            },
+            "message": {
+                "type": "string",
+                "description": "消息内容",
+            },
+        },
+        "required": ["message"],
+    },
+)
+def handle_send_message(message: str, level: str = "info") -> str:
+    """Write a message to the OpenClaw outbox for Trae to pick up."""
+    ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    entry = json.dumps({"timestamp": ts, "level": level, "message": message})
+    try:
+        result = ssh_run(
+            f"echo '{entry}' >> {MCP_MESSAGES_PATH} && "
+            f"echo 'Message written: [{level}] {message}'"
+        )
+        return result
+    except RuntimeError as e:
+        return f"Error writing message: {e}"
 
 
 # ----- MCP Protocol Loop -----
